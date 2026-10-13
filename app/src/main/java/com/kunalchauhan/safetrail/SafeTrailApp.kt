@@ -59,7 +59,7 @@ fun SafeTrailApp() {
             modifier = Modifier.padding(padding)
         ) {
             composable(Dest.Home.route) { HomeScreen() }
-            composable(Dest.Journey.route) { PlaceholderScreen("Journey check-in") }
+            composable(Dest.Journey.route) { JourneyScreen() }
             composable(Dest.Contacts.route) { ContactsScreen() }
         }
     }
