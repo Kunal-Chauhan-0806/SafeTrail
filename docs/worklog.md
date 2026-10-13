@@ -1,1 +1,1 @@
-2026-10-13: Created project, ran blank app on emulator, first push to GitHub
+2026-10-13: Built navigation skeleton (home screen, SOS button, bottom tabs), merged feature/skeleton

@@ -1,2 +1,1 @@
-# SafeTrail
-Proactive journey check-in and personal safety app for students. Work in progress.
+2026-10-13: Built navigation skeleton (home screen, SOS button, bottom tabs), merged feature/skeleton
