@@ -60,7 +60,7 @@ fun SafeTrailApp() {
         ) {
             composable(Dest.Home.route) { HomeScreen() }
             composable(Dest.Journey.route) { PlaceholderScreen("Journey check-in") }
-            composable(Dest.Contacts.route) { PlaceholderScreen("Trusted contacts") }
+            composable(Dest.Contacts.route) { ContactsScreen() }
         }
     }
 }
