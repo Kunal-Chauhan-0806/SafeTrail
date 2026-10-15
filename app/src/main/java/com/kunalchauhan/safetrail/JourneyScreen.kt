@@ -1,5 +1,11 @@
 package com.kunalchauhan.safetrail
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -10,43 +16,96 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import com.kunalchauhan.safetrail.data.AppDatabase
 import com.kunalchauhan.safetrail.data.JourneyStore
 import kotlinx.coroutines.delay
+
+private fun requiredPermissions(): Array<String> =
+    if (Build.VERSION.SDK_INT >= 33) {
+        arrayOf(Manifest.permission.SEND_SMS, Manifest.permission.POST_NOTIFICATIONS)
+    } else {
+        arrayOf(Manifest.permission.SEND_SMS)
+    }
+
+private fun hasAllPermissions(context: Context): Boolean =
+    requiredPermissions().all {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }
 
 @Composable
 fun JourneyScreen() {
     val context = LocalContext.current
     val store = remember { JourneyStore(context) }
+    val contactsFlow = remember { AppDatabase.get(context).contactDao().getAll() }
+    val contacts by contactsFlow.collectAsState(initial = emptyList())
+
     var active by remember { mutableStateOf(store.isActive()) }
     var destination by remember { mutableStateOf(store.destination()) }
     var endTime by remember { mutableLongStateOf(store.endTime()) }
+    var permissionError by remember { mutableStateOf(false) }
+    var pendingStart by remember { mutableStateOf<Pair<String, Int>?>(null) }
+
+    fun clearJourney() {
+        JourneyScheduler.cancelAll(context)
+        store.clear()
+        active = false
+        destination = ""
+        endTime = 0L
+    }
+
+    fun startJourney(dest: String, minutes: Int) {
+        val end = System.currentTimeMillis() + minutes * 60_000L
+        store.start(dest, end)
+        JourneyScheduler.scheduleCheck(context, end)
+        destination = dest
+        endTime = end
+        active = true
+    }
+
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val allGranted = requiredPermissions().all { result[it] == true }
+        val request = pendingStart
+        if (allGranted && request != null) {
+            permissionError = false
+            startJourney(request.first, request.second)
+        } else {
+            permissionError = true
+        }
+        pendingStart = null
+    }
 
     if (active) {
         ActiveJourney(
             destination = destination,
             endTime = endTime,
-            onArrived = {
-                store.clear()
-                active = false
-                destination = ""
-                endTime = 0L
-            }
+            isStillActive = { store.isActive() },
+            onArrived = { clearJourney() }
         )
     } else {
         StartJourney(
+            contactCount = contacts.size,
+            permissionError = permissionError,
             onStart = { dest, minutes ->
-                val end = System.currentTimeMillis() + minutes * 60_000L
-                store.start(dest, end)
-                destination = dest
-                endTime = end
-                active = true
+                if (hasAllPermissions(context)) {
+                    startJourney(dest, minutes)
+                } else {
+                    pendingStart = dest to minutes
+                    launcher.launch(requiredPermissions())
+                }
             }
         )
     }
 }
 
 @Composable
-fun StartJourney(onStart: (String, Int) -> Unit) {
+fun StartJourney(
+    contactCount: Int,
+    permissionError: Boolean,
+    onStart: (String, Int) -> Unit
+) {
     var destination by remember { mutableStateOf("") }
     var minutes by remember { mutableIntStateOf(30) }
     // 1 minute is only for testing, we will remove it later
@@ -86,10 +145,24 @@ fun StartJourney(onStart: (String, Int) -> Unit) {
                 )
             }
         }
+        if (contactCount == 0) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Add at least one trusted contact in the Contacts tab before starting a journey.",
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+        if (permissionError) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "SafeTrail needs SMS and notification permission to alert your contacts.",
+                color = MaterialTheme.colorScheme.error
+            )
+        }
         Spacer(Modifier.height(32.dp))
         Button(
             onClick = { onStart(destination.trim(), minutes) },
-            enabled = destination.isNotBlank(),
+            enabled = destination.isNotBlank() && contactCount > 0,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Start journey")
@@ -98,10 +171,19 @@ fun StartJourney(onStart: (String, Int) -> Unit) {
 }
 
 @Composable
-fun ActiveJourney(destination: String, endTime: Long, onArrived: () -> Unit) {
+fun ActiveJourney(
+    destination: String,
+    endTime: Long,
+    isStillActive: () -> Boolean,
+    onArrived: () -> Unit
+) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
+            if (!isStillActive()) {
+                onArrived()
+                break
+            }
             now = System.currentTimeMillis()
             delay(1000)
         }
