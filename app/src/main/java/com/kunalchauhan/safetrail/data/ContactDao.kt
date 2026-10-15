@@ -11,6 +11,9 @@ interface ContactDao {
     @Query("SELECT * FROM contacts ORDER BY name")
     fun getAll(): Flow<List<Contact>>
 
+    @Query("SELECT * FROM contacts")
+    suspend fun getAllOnce(): List<Contact>
+
     @Insert
     suspend fun insert(contact: Contact)
 
