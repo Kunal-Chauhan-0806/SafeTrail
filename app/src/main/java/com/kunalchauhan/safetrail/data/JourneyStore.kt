@@ -10,8 +10,15 @@ class JourneyStore(context: Context) {
         prefs.edit()
             .putString("destination", destination)
             .putLong("end_time", endTimeMillis)
+            .remove("location_link")
             .apply()
     }
+
+    fun saveLocation(link: String) {
+        prefs.edit().putString("location_link", link).apply()
+    }
+
+    fun locationLink(): String? = prefs.getString("location_link", null)
 
     fun clear() {
         prefs.edit().clear().apply()

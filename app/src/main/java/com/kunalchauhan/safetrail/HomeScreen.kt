@@ -29,12 +29,13 @@ fun HomeScreen() {
     var resultMessage by remember { mutableStateOf<String?>(null) }
     var waitingForPermission by remember { mutableStateOf(false) }
 
-    val smsLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted && waitingForPermission) {
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val smsGranted = result[Manifest.permission.SEND_SMS] == true
+        if (smsGranted && waitingForPermission) {
             countdown = SOS_SECONDS
-        } else if (!granted) {
+        } else if (!smsGranted) {
             resultMessage = "SafeTrail needs SMS permission to send an SOS."
         }
         waitingForPermission = false
@@ -46,11 +47,17 @@ fun HomeScreen() {
         val hasSms = ContextCompat.checkSelfPermission(
             context, Manifest.permission.SEND_SMS
         ) == PackageManager.PERMISSION_GRANTED
-        if (hasSms) {
+        if (hasSms && LocationHelper.hasPermission(context)) {
             countdown = SOS_SECONDS
         } else {
             waitingForPermission = true
-            smsLauncher.launch(Manifest.permission.SEND_SMS)
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.SEND_SMS,
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
         }
     }
 
@@ -74,11 +81,14 @@ fun HomeScreen() {
             } else {
                 countdown = 0
                 scope.launch {
-                    val (sent, total) = AlertSender.sendToContacts(
+                    val result = AlertSender.sendToContacts(
                         context,
                         "SOS from SafeTrail: I need help right now. Please call me or come and find me."
                     )
-                    resultMessage = "SOS sent to $sent of $total trusted contacts."
+                    val locationText =
+                        if (result.locationIncluded) "Location included." else "Location was not available."
+                    resultMessage =
+                        "SOS sent to ${result.sent} of ${result.total} trusted contacts. $locationText"
                 }
             }
         }

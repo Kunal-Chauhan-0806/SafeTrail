@@ -6,10 +6,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.telephony.SmsManager
 import androidx.core.app.NotificationCompat
-import com.kunalchauhan.safetrail.data.AppDatabase
 import com.kunalchauhan.safetrail.data.JourneyStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,29 +38,23 @@ class AlarmReceiver : BroadcastReceiver() {
             JourneyScheduler.ACTION_SEND -> {
                 if (!store.isActive()) return
                 val destination = store.destination()
+                val fallbackLink = store.locationLink()
                 val pendingResult = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        val contacts = AppDatabase.get(context).contactDao().getAllOnce()
-                        val message = "SafeTrail alert: I have not checked in from my journey to " +
-                                "$destination. Please try to reach me."
-                        var sent = 0
-                        contacts.forEach { contact ->
-                            try {
-                                val sms = smsManager(context)
-                                sms.sendMultipartTextMessage(
-                                    contact.phone, null, sms.divideMessage(message), null, null
-                                )
-                                sent++
-                            } catch (e: Exception) {
-                                // this contact could not be messaged, keep going with the rest
-                            }
-                        }
+                        val result = AlertSender.sendToContacts(
+                            context,
+                            "SafeTrail alert: I have not checked in from my journey to " +
+                                "$destination. Please try to reach me.",
+                            fallbackLink
+                        )
                         store.clear()
+                        val locationText =
+                            if (result.locationIncluded) "Location included." else "Location was not available."
                         showNotification(
                             context,
                             "Alert sent",
-                            "Your trusted contacts were messaged ($sent of ${contacts.size}).",
+                            "Your trusted contacts were messaged (${result.sent} of ${result.total}). $locationText",
                             withSafeButton = false
                         )
                     } finally {
@@ -74,14 +65,6 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 }
-
-@Suppress("DEPRECATION")
-private fun smsManager(context: Context): SmsManager =
-    if (Build.VERSION.SDK_INT >= 31) {
-        context.getSystemService(SmsManager::class.java)
-    } else {
-        SmsManager.getDefault()
-    }
 
 private fun showNotification(
     context: Context,
@@ -94,7 +77,7 @@ private fun showNotification(
         NotificationChannel(CHANNEL_ID, "SafeTrail alerts", NotificationManager.IMPORTANCE_HIGH)
     )
     val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_launcher_foreground)
+        .setSmallIcon(android.R.drawable.ic_dialog_alert)
         .setContentTitle(title)
         .setContentText(text)
         .setPriority(NotificationCompat.PRIORITY_HIGH)

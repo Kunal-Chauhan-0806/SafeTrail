@@ -20,13 +20,22 @@ import androidx.core.content.ContextCompat
 import com.kunalchauhan.safetrail.data.AppDatabase
 import com.kunalchauhan.safetrail.data.JourneyStore
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
+// the journey cannot start without these
 private fun requiredPermissions(): Array<String> =
     if (Build.VERSION.SDK_INT >= 33) {
         arrayOf(Manifest.permission.SEND_SMS, Manifest.permission.POST_NOTIFICATIONS)
     } else {
         arrayOf(Manifest.permission.SEND_SMS)
     }
+
+// location is requested too, but the journey still starts if it is denied
+private fun requestedPermissions(): Array<String> =
+    requiredPermissions() + arrayOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    )
 
 private fun hasAllPermissions(context: Context): Boolean =
     requiredPermissions().all {
@@ -36,6 +45,7 @@ private fun hasAllPermissions(context: Context): Boolean =
 @Composable
 fun JourneyScreen() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val store = remember { JourneyStore(context) }
     val contactsFlow = remember { AppDatabase.get(context).contactDao().getAll() }
     val contacts by contactsFlow.collectAsState(initial = emptyList())
@@ -58,6 +68,9 @@ fun JourneyScreen() {
         val end = System.currentTimeMillis() + minutes * 60_000L
         store.start(dest, end)
         JourneyScheduler.scheduleCheck(context, end)
+        scope.launch {
+            LocationHelper.mapLink(context)?.let { store.saveLocation(it) }
+        }
         destination = dest
         endTime = end
         active = true
@@ -89,11 +102,11 @@ fun JourneyScreen() {
             contactCount = contacts.size,
             permissionError = permissionError,
             onStart = { dest, minutes ->
-                if (hasAllPermissions(context)) {
+                if (hasAllPermissions(context) && LocationHelper.hasPermission(context)) {
                     startJourney(dest, minutes)
                 } else {
                     pendingStart = dest to minutes
-                    launcher.launch(requiredPermissions())
+                    launcher.launch(requestedPermissions())
                 }
             }
         )
@@ -119,7 +132,7 @@ fun StartJourney(
         Spacer(Modifier.height(8.dp))
         Text(
             "Set when you expect to arrive. If you haven't checked in by then, " +
-                    "SafeTrail will alert your trusted contacts.",
+                "SafeTrail will alert your trusted contacts.",
             style = MaterialTheme.typography.bodyMedium
         )
         Spacer(Modifier.height(24.dp))
