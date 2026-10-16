@@ -3,3 +3,4 @@
 2026-10-13: Added journey check-in screen with countdown, saved in SharedPreferences, merged feature/journey
 2026-10-16: Added journey escalation (AlarmManager, notification action, SMS alert to trusted contacts), merged feature/alerts
 2026-10-16: Added SOS button and shake-to-SOS with 5 second cancel countdown, merged feature/sos
+2026-10-16: Added SOS button and shake-to-SOS with 5 second cancel countdown, merged feature/sos
