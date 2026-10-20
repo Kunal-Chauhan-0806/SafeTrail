@@ -29,6 +29,11 @@ fun HomeScreen() {
     var resultMessage by remember { mutableStateOf<String?>(null) }
     var waitingForPermission by remember { mutableStateOf(false) }
 
+    var showFakeSetup by remember { mutableStateOf(false) }
+    var showFakeCall by remember { mutableStateOf(false) }
+    var fakeCallDelay by remember { mutableIntStateOf(0) }
+    var callerName by remember { mutableStateOf("Mom") }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
@@ -94,6 +99,15 @@ fun HomeScreen() {
         }
     }
 
+    // counts down to the moment the fake call starts ringing
+    LaunchedEffect(fakeCallDelay) {
+        if (fakeCallDelay > 0) {
+            delay(1000)
+            fakeCallDelay -= 1
+            if (fakeCallDelay == 0) showFakeCall = true
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -120,6 +134,20 @@ fun HomeScreen() {
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center
         )
+        Spacer(Modifier.height(24.dp))
+        OutlinedButton(onClick = { showFakeSetup = true }) {
+            Text("Fake call")
+        }
+        if (fakeCallDelay > 0) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "$callerName will call in $fakeCallDelay s",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            TextButton(onClick = { fakeCallDelay = 0 }) {
+                Text("Cancel fake call")
+            }
+        }
     }
 
     if (countdown > 0) {
@@ -137,5 +165,50 @@ fun HomeScreen() {
             text = { Text(message) },
             confirmButton = { TextButton(onClick = { resultMessage = null }) { Text("OK") } }
         )
+    }
+
+    if (showFakeSetup) {
+        var name by remember { mutableStateOf(callerName) }
+        var ringIn by remember { mutableIntStateOf(10) }
+        AlertDialog(
+            onDismissRequest = { showFakeSetup = false },
+            title = { Text("Fake call") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Caller name") },
+                        singleLine = true
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Ring in", style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(0, 10, 30).forEach { s ->
+                            FilterChip(
+                                selected = ringIn == s,
+                                onClick = { ringIn = s },
+                                label = { Text(if (s == 0) "Now" else "$s sec") }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    callerName = name.ifBlank { "Mom" }
+                    showFakeSetup = false
+                    if (ringIn == 0) showFakeCall = true else fakeCallDelay = ringIn
+                }) { Text("Start") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFakeSetup = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showFakeCall) {
+        FakeCallOverlay(callerName = callerName, onClose = { showFakeCall = false })
     }
 }
