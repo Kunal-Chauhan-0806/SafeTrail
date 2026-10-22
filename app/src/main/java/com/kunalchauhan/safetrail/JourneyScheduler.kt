@@ -54,5 +54,6 @@ object JourneyScheduler {
         alarmManager.cancel(pending(context, ACTION_CHECK))
         alarmManager.cancel(pending(context, ACTION_SEND))
         context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+        context.stopService(Intent(context, LocationService::class.java))
     }
 }

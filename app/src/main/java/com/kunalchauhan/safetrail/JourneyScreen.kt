@@ -2,6 +2,7 @@ package com.kunalchauhan.safetrail
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -68,6 +69,12 @@ fun JourneyScreen() {
         val end = System.currentTimeMillis() + minutes * 60_000L
         store.start(dest, end)
         JourneyScheduler.scheduleCheck(context, end)
+        if (LocationHelper.hasPermission(context)) {
+            // keeps the location fresh for the whole journey, even with the app closed
+            ContextCompat.startForegroundService(
+                context, Intent(context, LocationService::class.java)
+            )
+        }
         scope.launch {
             LocationHelper.mapLink(context)?.let { store.saveLocation(it) }
         }
@@ -190,6 +197,8 @@ fun ActiveJourney(
     isStillActive: () -> Boolean,
     onArrived: () -> Unit
 ) {
+    val context = LocalContext.current
+    val locationOn = LocationHelper.hasPermission(context)
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -221,6 +230,13 @@ fun ActiveJourney(
         Text("Journey in progress", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         Text("To: $destination", style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            if (locationOn) "Live location is on"
+            else "Location is off. Allow it in app settings to share a live link.",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center
+        )
         Spacer(Modifier.height(32.dp))
         Text(
             timeText,
