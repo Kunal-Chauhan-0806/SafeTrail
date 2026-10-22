@@ -161,7 +161,7 @@ fun StartJourney(
                 FilterChip(
                     selected = minutes == m,
                     onClick = { minutes = m },
-                    label = { Text("$m min") }
+                    label = { Text(if (m == 1) "1 min (demo)" else "$m min") }
                 )
             }
         }
