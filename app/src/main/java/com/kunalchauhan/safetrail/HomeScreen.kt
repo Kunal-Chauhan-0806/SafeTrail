@@ -6,6 +6,7 @@ import android.hardware.Sensor
 import android.hardware.SensorManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -110,31 +111,56 @@ fun HomeScreen() {
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("SafeTrail", style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Travel safe. We'll check in if you can't.",
-            style = MaterialTheme.typography.bodyMedium
-        )
-        Spacer(Modifier.height(48.dp))
-        Button(
-            onClick = { triggerSos() },
-            shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-            modifier = Modifier.size(180.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("SOS", style = MaterialTheme.typography.headlineLarge)
+            Column(modifier = Modifier.weight(1f)) {
+                Text("SafeTrail", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "Travel safe. We'll check in if you can't.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            DarkModeToggle()
+        }
+
+        Spacer(Modifier.weight(1f))
+
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(240.dp)
+                .background(MaterialTheme.colorScheme.errorContainer, CircleShape)
+        ) {
+            Button(
+                onClick = { triggerSos() },
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                ),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp),
+                modifier = Modifier.size(180.dp)
+            ) {
+                Text("SOS", style = MaterialTheme.typography.displayMedium)
+            }
         }
         Spacer(Modifier.height(24.dp))
         Text(
             "Press SOS, or shake the phone hard three times.",
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(24.dp))
+
+        Spacer(Modifier.weight(1f))
+
         OutlinedButton(onClick = { showFakeSetup = true }) {
             Text("Fake call")
         }
