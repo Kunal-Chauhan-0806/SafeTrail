@@ -9,3 +9,4 @@
 2026-10-22: Added custom icon, README, privacy policy and screenshots, fixed fake call crash (missing VIBRATE permission), merged feature/polish
 2026-10-24: Added icon, README, privacy policy, screenshots, fixed fake call crash, merged feature/polish
 2026-10-24: Added icon, README, privacy policy, screenshots, fixed fake call crash, merged feature/polish
+2026-10-24: Added icon, README, privacy policy, screenshots, fixed fake call crash, merged feature/polish
