@@ -4,12 +4,14 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,6 +45,8 @@ private fun hasAllPermissions(context: Context): Boolean =
         ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
     }
 
+private class PendingJourney(val destination: String, val minutes: Int, val address: String?)
+
 @Composable
 fun JourneyScreen() {
     val context = LocalContext.current
@@ -56,6 +60,9 @@ fun JourneyScreen() {
     var endTime by remember { mutableLongStateOf(store.endTime()) }
     var permissionError by remember { mutableStateOf(false) }
     var pendingStart by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    var checking by remember { mutableStateOf(false) }
+    var placeError by remember { mutableStateOf<String?>(null) }
+    var confirm by remember { mutableStateOf<PendingJourney?>(null) }
 
     fun clearJourney() {
         JourneyScheduler.cancelAll(context)
@@ -97,24 +104,65 @@ fun JourneyScreen() {
         pendingStart = null
     }
 
+    fun beginJourney(dest: String, minutes: Int) {
+        if (hasAllPermissions(context) && LocationHelper.hasPermission(context)) {
+            startJourney(dest, minutes)
+        } else {
+            pendingStart = dest to minutes
+            launcher.launch(requestedPermissions())
+        }
+    }
+
     if (active) {
         ActiveJourney(
             destination = destination,
             endTime = endTime,
-            isStillActive = { store.isActive() },
+            store = store,
             onArrived = { clearJourney() }
         )
     } else {
         StartJourney(
             contactCount = contacts.size,
             permissionError = permissionError,
+            checking = checking,
+            placeError = placeError,
             onStart = { dest, minutes ->
-                if (hasAllPermissions(context) && LocationHelper.hasPermission(context)) {
-                    startJourney(dest, minutes)
-                } else {
-                    pendingStart = dest to minutes
-                    launcher.launch(requestedPermissions())
+                placeError = null
+                checking = true
+                scope.launch {
+                    when (val check = GeoHelper.findPlace(context, dest)) {
+                        is PlaceCheck.Found -> confirm = PendingJourney(dest, minutes, check.address)
+                        PlaceCheck.NotFound -> placeError =
+                            "We couldn't find \"$dest\". Try a more specific place name or address."
+                        PlaceCheck.Unavailable -> confirm = PendingJourney(dest, minutes, null)
+                    }
+                    checking = false
                 }
+            }
+        )
+    }
+
+    confirm?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text(if (pending.address != null) "Heading here?" else "Place not verified") },
+            text = {
+                Text(
+                    pending.address
+                        ?: "SafeTrail couldn't check \"${pending.destination}\" right now " +
+                        "(no internet or place service). You can still start the journey."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = null
+                    beginJourney(pending.destination, pending.minutes)
+                }) {
+                    Text(if (pending.address != null) "Start journey" else "Start anyway")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirm = null }) { Text("Change") }
             }
         )
     }
@@ -124,17 +172,22 @@ fun JourneyScreen() {
 fun StartJourney(
     contactCount: Int,
     permissionError: Boolean,
+    checking: Boolean,
+    placeError: String?,
     onStart: (String, Int) -> Unit
 ) {
     var destination by remember { mutableStateOf("") }
     var minutes by remember { mutableIntStateOf(30) }
-    // 1 minute is only for testing, we will remove it later
+    // 1 minute is only for the demo, it lets you see the whole alert flow quickly
     val options = listOf(1, 15, 30, 45, 60, 90)
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
     ) {
+        Spacer(Modifier.height(24.dp))
         Text("Start a journey", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(8.dp))
         Text(
@@ -148,6 +201,8 @@ fun StartJourney(
             onValueChange = { destination = it },
             label = { Text("Where are you going?") },
             singleLine = true,
+            isError = placeError != null,
+            supportingText = { placeError?.let { Text(it) } },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(16.dp))
@@ -182,10 +237,10 @@ fun StartJourney(
         Spacer(Modifier.height(32.dp))
         Button(
             onClick = { onStart(destination.trim(), minutes) },
-            enabled = destination.isNotBlank() && contactCount > 0,
+            enabled = destination.trim().length >= 3 && contactCount > 0 && !checking,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Start journey")
+            Text(if (checking) "Checking place..." else "Start journey")
         }
     }
 }
@@ -194,7 +249,7 @@ fun StartJourney(
 fun ActiveJourney(
     destination: String,
     endTime: Long,
-    isStillActive: () -> Boolean,
+    store: JourneyStore,
     onArrived: () -> Unit
 ) {
     val context = LocalContext.current
@@ -202,7 +257,7 @@ fun ActiveJourney(
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
-            if (!isStillActive()) {
+            if (!store.isActive()) {
                 onArrived()
                 break
             }
@@ -223,10 +278,13 @@ fun ActiveJourney(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(Modifier.height(16.dp))
         Text("Journey in progress", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         Text("To: $destination", style = MaterialTheme.typography.bodyLarge)
@@ -237,10 +295,10 @@ fun ActiveJourney(
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
         Text(
             timeText,
-            style = MaterialTheme.typography.displayLarge,
+            style = MaterialTheme.typography.displayMedium,
             color = if (expired) MaterialTheme.colorScheme.error
             else MaterialTheme.colorScheme.onSurface
         )
@@ -252,9 +310,68 @@ fun ActiveJourney(
                 textAlign = TextAlign.Center
             )
         }
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(24.dp))
+        LiveLocationCard(store.locationLink(), store.locationTime(), now)
+        Spacer(Modifier.height(24.dp))
         Button(onClick = onArrived, modifier = Modifier.fillMaxWidth()) {
             Text("I've arrived safely")
+        }
+    }
+}
+
+private fun parseCoordinates(link: String?): Pair<Double, Double>? {
+    val part = link?.substringAfter("q=", "") ?: return null
+    val numbers = part.split(",")
+    val lat = numbers.getOrNull(0)?.toDoubleOrNull() ?: return null
+    val lng = numbers.getOrNull(1)?.toDoubleOrNull() ?: return null
+    return lat to lng
+}
+
+@Composable
+private fun LiveLocationCard(link: String?, updatedAt: Long, now: Long) {
+    val context = LocalContext.current
+    val coords = parseCoordinates(link)
+    var address by remember { mutableStateOf<String?>(null) }
+    val lookupKey = coords?.let { String.format("%.3f,%.3f", it.first, it.second) }
+
+    // looks up the street address again whenever the phone has moved about 100 m
+    LaunchedEffect(lookupKey) {
+        address = null
+        if (coords != null) {
+            address = GeoHelper.addressFor(context, coords.first, coords.second)
+        }
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Your live location", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(8.dp))
+            if (coords == null) {
+                Text("Waiting for a GPS fix...", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Text(
+                    address ?: "Looking up the address...",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    String.format("%.5f, %.5f", coords.first, coords.second),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                val secondsAgo = ((now - updatedAt) / 1000).coerceAtLeast(0L)
+                val agoText = if (secondsAgo < 60) "$secondsAgo s ago" else "${secondsAgo / 60} min ago"
+                Text("Updated $agoText", style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = {
+                    try {
+                        val url = "https://maps.google.com/?q=${coords.first},${coords.second}"
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    } catch (e: Exception) {
+                        // no app can open the link
+                    }
+                }) {
+                    Text("Open in Maps")
+                }
+            }
         }
     }
 }

@@ -11,14 +11,20 @@ class JourneyStore(context: Context) {
             .putString("destination", destination)
             .putLong("end_time", endTimeMillis)
             .remove("location_link")
+            .remove("location_time")
             .apply()
     }
 
     fun saveLocation(link: String) {
-        prefs.edit().putString("location_link", link).apply()
+        prefs.edit()
+            .putString("location_link", link)
+            .putLong("location_time", System.currentTimeMillis())
+            .apply()
     }
 
     fun locationLink(): String? = prefs.getString("location_link", null)
+
+    fun locationTime(): Long = prefs.getLong("location_time", 0L)
 
     fun clear() {
         prefs.edit().clear().apply()
