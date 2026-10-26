@@ -12,6 +12,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -169,6 +171,21 @@ fun JourneyScreen() {
 }
 
 @Composable
+private fun NoticeCard(text: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+    ) {
+        Text(
+            text,
+            modifier = Modifier.padding(16.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onErrorContainer
+        )
+    }
+}
+
+@Composable
 fun StartJourney(
     contactCount: Int,
     permissionError: Boolean,
@@ -185,62 +202,72 @@ fun StartJourney(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp)
+            .padding(20.dp)
     ) {
-        Spacer(Modifier.height(24.dp))
-        Text("Start a journey", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(8.dp))
+        Text("Start a journey", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(4.dp))
         Text(
             "Set when you expect to arrive. If you haven't checked in by then, " +
                 "SafeTrail will alert your trusted contacts.",
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(24.dp))
-        OutlinedTextField(
-            value = destination,
-            onValueChange = { destination = it },
-            label = { Text("Where are you going?") },
-            singleLine = true,
-            isError = placeError != null,
-            supportingText = { placeError?.let { Text(it) } },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(16.dp))
-        Text("I expect to arrive in", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Spacer(Modifier.height(20.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
-            options.forEach { m ->
-                FilterChip(
-                    selected = minutes == m,
-                    onClick = { minutes = m },
-                    label = { Text(if (m == 1) "1 min (demo)" else "$m min") }
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Destination", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = destination,
+                    onValueChange = { destination = it },
+                    label = { Text("Where are you going?") },
+                    singleLine = true,
+                    isError = placeError != null,
+                    supportingText = { placeError?.let { Text(it) } },
+                    modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(16.dp))
+                Text("I expect to arrive in", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    options.forEach { m ->
+                        FilterChip(
+                            selected = minutes == m,
+                            onClick = { minutes = m },
+                            label = { Text(if (m == 1) "1 min (demo)" else "$m min") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        )
+                    }
+                }
             }
         }
         if (contactCount == 0) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "Add at least one trusted contact in the Contacts tab before starting a journey.",
-                color = MaterialTheme.colorScheme.error
-            )
+            NoticeCard("Add at least one trusted contact in the Contacts tab before starting a journey.")
         }
         if (permissionError) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "SafeTrail needs SMS and notification permission to alert your contacts.",
-                color = MaterialTheme.colorScheme.error
-            )
+            NoticeCard("SafeTrail needs SMS and notification permission to alert your contacts.")
         }
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
         Button(
             onClick = { onStart(destination.trim(), minutes) },
             enabled = destination.trim().length >= 3 && contactCount > 0 && !checking,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().height(56.dp)
         ) {
-            Text(if (checking) "Checking place..." else "Start journey")
+            Text(
+                if (checking) "Checking place..." else "Start journey",
+                style = MaterialTheme.typography.labelLarge
+            )
         }
     }
 }
@@ -276,45 +303,70 @@ fun ActiveJourney(
     } else {
         String.format("%02d:%02d", mins, secs)
     }
+    val timerBg =
+        if (expired) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+    val timerFg =
+        if (expired) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(16.dp))
-        Text("Journey in progress", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
-        Text("To: $destination", style = MaterialTheme.typography.bodyLarge)
+        Text("Journey in progress", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(4.dp))
+        Text(
+            "To: $destination",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(20.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = timerBg)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    if (expired) "Time's up" else "Time remaining",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = timerFg
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(timeText, style = MaterialTheme.typography.displayMedium, color = timerFg)
+                if (expired) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Check in now.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = timerFg,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
         Text(
             if (locationOn) "Live location is on"
             else "Location is off. Allow it in app settings to share a live link.",
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(24.dp))
-        Text(
-            timeText,
-            style = MaterialTheme.typography.displayMedium,
-            color = if (expired) MaterialTheme.colorScheme.error
-            else MaterialTheme.colorScheme.onSurface
-        )
-        if (expired) {
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "Time's up. Check in now.",
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center
-            )
-        }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
         LiveLocationCard(store.locationLink(), store.locationTime(), now)
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onArrived, modifier = Modifier.fillMaxWidth()) {
-            Text("I've arrived safely")
+        Button(
+            onClick = onArrived,
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+        ) {
+            Text("I've arrived safely", style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -342,10 +394,22 @@ private fun LiveLocationCard(link: String?, updatedAt: Long, now: Long) {
         }
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Your live location", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Place,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Your live location", style = MaterialTheme.typography.titleSmall)
+            }
+            Spacer(Modifier.height(10.dp))
             if (coords == null) {
                 Text("Waiting for a GPS fix...", style = MaterialTheme.typography.bodyMedium)
             } else {
@@ -356,11 +420,16 @@ private fun LiveLocationCard(link: String?, updatedAt: Long, now: Long) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     String.format("%.5f, %.5f", coords.first, coords.second),
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 val secondsAgo = ((now - updatedAt) / 1000).coerceAtLeast(0L)
                 val agoText = if (secondsAgo < 60) "$secondsAgo s ago" else "${secondsAgo / 60} min ago"
-                Text("Updated $agoText", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Updated $agoText",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 TextButton(onClick = {
                     try {
                         val url = "https://maps.google.com/?q=${coords.first},${coords.second}"
