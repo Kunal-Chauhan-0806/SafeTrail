@@ -7,3 +7,4 @@
 2026-10-21: Added fake incoming call (caller name, ring delay, ringtone and vibration), merged feature/fakecall
 2026-10-22: Added live location updates during a journey (foreground service, fused location)
 2026-10-22: Added custom icon, README, privacy policy and screenshots, fixed fake call crash (missing VIBRATE permission), merged feature/polish
+2026-10-24: Added icon, README, privacy policy, screenshots, fixed fake call crash, merged feature/polish
