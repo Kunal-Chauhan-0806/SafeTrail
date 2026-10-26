@@ -13,3 +13,4 @@
 2026-10-24: Added icon, README, privacy policy, screenshots, fixed fake call crash, merged feature/polish
 2026-10-24: Added icon, README, privacy policy, screenshots, fixed fake call crash, merged feature/polish
 2026-10-26: Added new theme, dark mode toggle, redesigned home, navigation, contacts and journey screens, merged feature/theme
+2026-10-26: Added first-run welcome screen, real SMS delivery results and clear failure messages, merged feature/welcome
