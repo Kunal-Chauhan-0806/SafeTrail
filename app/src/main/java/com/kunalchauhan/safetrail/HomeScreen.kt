@@ -91,10 +91,7 @@ fun HomeScreen() {
                         context,
                         "SOS from SafeTrail: I need help right now. Please call me or come and find me."
                     )
-                    val locationText =
-                        if (result.locationIncluded) "Location included." else "Location was not available."
-                    resultMessage =
-                        "SOS sent to ${result.sent} of ${result.total} trusted contacts. $locationText"
+                    resultMessage = result.summary("SOS")
                 }
             }
         }

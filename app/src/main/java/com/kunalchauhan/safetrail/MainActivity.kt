@@ -8,6 +8,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.kunalchauhan.safetrail.ui.theme.SafeTrailTheme
 import com.kunalchauhan.safetrail.ui.theme.ThemeSettings
 
@@ -25,8 +29,16 @@ class MainActivity : ComponentActivity() {
                 )
                 onDispose { }
             }
+            var onboarded by remember { mutableStateOf(Onboarding.isDone(this@MainActivity)) }
             SafeTrailTheme(darkTheme = dark) {
-                SafeTrailApp()
+                if (onboarded) {
+                    SafeTrailApp()
+                } else {
+                    WelcomeScreen(onDone = {
+                        Onboarding.markDone(this@MainActivity)
+                        onboarded = true
+                    })
+                }
             }
         }
     }
