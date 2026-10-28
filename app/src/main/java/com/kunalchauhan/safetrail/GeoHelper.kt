@@ -8,6 +8,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 import java.util.Locale
 import kotlin.coroutines.resume
 
@@ -27,12 +32,31 @@ object GeoHelper {
             .ifBlank { "Unnamed place" }
     }
 
-    // Looks the typed text up as a place name or address
+    // Checks that the typed text is a real place. Tries the phone's own lookup first,
+    // then OpenStreetMap, so it still works on phones without Google's lookup service.
     suspend fun findPlace(context: Context, query: String): PlaceCheck {
+        val first = findWithGeocoder(context, query)
+        if (first is PlaceCheck.Found) return first
+        val second = findWithOpenStreetMap(query)
+        if (second is PlaceCheck.Found) return second
+        return if (first is PlaceCheck.NotFound || second is PlaceCheck.NotFound) {
+            PlaceCheck.NotFound
+        } else {
+            PlaceCheck.Unavailable
+        }
+    }
+
+    // Turns coordinates into a readable address, or null if none can be found
+    suspend fun addressFor(context: Context, lat: Double, lng: Double): String? =
+        addressWithGeocoder(context, lat, lng) ?: addressWithOpenStreetMap(lat, lng)
+
+    // ---------- the phone's own Geocoder ----------
+
+    private suspend fun findWithGeocoder(context: Context, query: String): PlaceCheck {
         if (!Geocoder.isPresent()) return PlaceCheck.Unavailable
         val geocoder = Geocoder(context, Locale.getDefault())
         return try {
-            val results: List<Address>? = withTimeoutOrNull(8000L) { lookup(geocoder, query) }
+            val results: List<Address>? = withTimeoutOrNull(6000L) { lookup(geocoder, query) }
             when {
                 results == null -> PlaceCheck.Unavailable
                 results.isEmpty() -> PlaceCheck.NotFound
@@ -43,12 +67,11 @@ object GeoHelper {
         }
     }
 
-    // Turns coordinates into a readable address, or null if it cannot be found
-    suspend fun addressFor(context: Context, lat: Double, lng: Double): String? {
+    private suspend fun addressWithGeocoder(context: Context, lat: Double, lng: Double): String? {
         if (!Geocoder.isPresent()) return null
         val geocoder = Geocoder(context, Locale.getDefault())
         return try {
-            withTimeoutOrNull(8000L) { reverse(geocoder, lat, lng) }
+            withTimeoutOrNull(6000L) { reverse(geocoder, lat, lng) }
                 ?.firstOrNull()
                 ?.let { label(it) }
         } catch (e: Exception) {
@@ -103,4 +126,62 @@ object GeoHelper {
                 }
             }
         }
+
+    // ---------- OpenStreetMap (Nominatim), used as a backup ----------
+
+    private suspend fun fetchText(url: String): String? = withContext(Dispatchers.IO) {
+        var connection: HttpURLConnection? = null
+        try {
+            connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 6000
+                readTimeout = 6000
+                // OpenStreetMap asks apps to identify themselves
+                setRequestProperty("User-Agent", "SafeTrail/1.0 (student project)")
+                setRequestProperty("Accept-Language", Locale.getDefault().toLanguageTag())
+            }
+            if (connection.responseCode == 200) {
+                connection.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    private suspend fun findWithOpenStreetMap(query: String): PlaceCheck {
+        val url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
+            URLEncoder.encode(query, "UTF-8")
+        val body = fetchText(url) ?: return PlaceCheck.Unavailable
+        return try {
+            val results = JSONArray(body)
+            if (results.length() == 0) {
+                PlaceCheck.NotFound
+            } else {
+                val first = results.getJSONObject(0)
+                PlaceCheck.Found(
+                    first.getString("display_name"),
+                    first.getString("lat").toDouble(),
+                    first.getString("lon").toDouble()
+                )
+            }
+        } catch (e: Exception) {
+            PlaceCheck.Unavailable
+        }
+    }
+
+    private suspend fun addressWithOpenStreetMap(lat: Double, lng: Double): String? {
+        val url = "https://nominatim.openstreetmap.org/reverse?format=json" +
+            "&lat=" + String.format(Locale.US, "%.6f", lat) +
+            "&lon=" + String.format(Locale.US, "%.6f", lng)
+        val body = fetchText(url) ?: return null
+        return try {
+            val result = JSONObject(body)
+            if (result.has("error")) null else result.optString("display_name").ifBlank { null }
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
