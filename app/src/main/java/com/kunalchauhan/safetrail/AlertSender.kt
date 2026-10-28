@@ -80,10 +80,12 @@ object AlertSender {
     suspend fun sendToContacts(
         context: Context,
         message: String,
-        fallbackLink: String? = null
+        fallbackLink: String? = null,
+        fresh: Boolean = true,
+        waitMillis: Long = 20_000L
     ): SendResult = withContext(Dispatchers.IO) {
         val app = context.applicationContext
-        val link = LocationHelper.mapLink(context) ?: fallbackLink
+        val link = (if (fresh) LocationHelper.mapLink(context) else null) ?: fallbackLink
         val fullMessage = if (link != null) {
             "$message Last known location: $link"
         } else {
@@ -140,7 +142,7 @@ object AlertSender {
                 }
             }
             // wait up to 20 seconds for the phone to report back
-            withTimeoutOrNull(20_000L) { done.await() }
+            withTimeoutOrNull(waitMillis) { done.await() }
         } finally {
             try {
                 app.unregisterReceiver(receiver)

@@ -38,6 +38,7 @@ class AlarmReceiver : BroadcastReceiver() {
             JourneyScheduler.ACTION_SEND -> {
                 if (!store.isActive()) return
                 val destination = store.destination()
+                // the journey service keeps this location fresh, so there is no slow lookup here
                 val fallbackLink = store.locationLink()
                 val pendingResult = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
@@ -46,15 +47,27 @@ class AlarmReceiver : BroadcastReceiver() {
                             context,
                             "SafeTrail alert: I have not checked in from my journey to " +
                                 "$destination. Please try to reach me.",
-                            fallbackLink
+                            fallbackLink,
+                            fresh = false,
+                            waitMillis = 6_000L
                         )
                         store.clear()
-                        val locationText =
-                            if (result.locationIncluded) "Location included." else "Location was not available."
+                        context.stopService(Intent(context, LocationService::class.java))
+                        val ok = result.problem == null && result.failedNames.isEmpty()
                         showNotification(
                             context,
-                            "Alert sent",
-                            "Your trusted contacts were messaged (${result.sent} of ${result.total}). $locationText",
+                            if (ok) "Alert sent" else "Alert problem",
+                            result.summary("Alert"),
+                            withSafeButton = false
+                        )
+                    } catch (e: Exception) {
+                        store.clear()
+                        context.stopService(Intent(context, LocationService::class.java))
+                        showNotification(
+                            context,
+                            "Alert problem",
+                            "SafeTrail could not send the alert. Please contact your trusted " +
+                                "contacts directly.",
                             withSafeButton = false
                         )
                     } finally {
@@ -80,6 +93,7 @@ private fun showNotification(
         .setSmallIcon(android.R.drawable.ic_dialog_alert)
         .setContentTitle(title)
         .setContentText(text)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(text))
         .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setAutoCancel(true)
     if (withSafeButton) {
